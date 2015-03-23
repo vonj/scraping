@@ -120,12 +120,24 @@ class Scraper(object):
     def _dstr(self, d):
         return d.strftime('%Y-%m-%d kl %H:%M')
 
+    def _extract_email_address(self, href):
+        reobj = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,6}\b", re.IGNORECASE)
+        l = re.findall(reobj, href)
+        if l:
+            return l[0]
+        return ''
+
     def _get_article(self, url, title, created, updated, keywords):
         r = requests.get(url)
         soup = bs4.BeautifulSoup(r.text)
         lead = soup.find('div', {'class': 'abLeadText'})
         body = soup.find_all('div', {'class': 'abBodyText'})
         address = soup.find('address')
+
+        anchor = address.find('a')
+        email = ''
+        if anchor.attrs.has_key('href'):
+            email = self._extract_email_address(anchor['href'])
 
         return \
             '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />' + \
@@ -148,7 +160,7 @@ class Scraper(object):
             '</tr>' + \
             '<tr>' + \
             '<td>Källa:</td>' + \
-            '<td><i>' + url + '</i></td>' + \
+            '<td><i><a href="' + url + '">' + url + '</a></i></td>' + \
             '</tr>' + \
             '<tr>' + \
             '<td>Hämtad:</td>' + \
@@ -160,6 +172,6 @@ class Scraper(object):
             '</table>' + \
             self._tostring(lead) + \
             self._tostring(body) + \
-            self._tostring(address) + \
+            self._tostring(address) + ' ' + email + \
             '<p style="page-break-before: always">'
 
