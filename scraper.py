@@ -77,19 +77,62 @@ class Scraper(object):
                 if created >= after and created < before:
                     title = link.contents[0].encode('utf-8').strip()
                     url = link.get('href').strip()
-                    # FIXME keywords from dict
-                    keywords = keyword
-                    articles += self._get_article(url, title, created, updated, keywords)
-        article_text, errors = tidylib.tidy_document(articles)
-        return article_text
+                    self._get_article(url, title, created, updated, keyword)
 
+    def _render_email(self, email):
+        return '<a href="mailto:' + email + '">' + email + '</a>'
 
     def search_keywords(self, keywords, before, after):
-        report = ''
-        for keyword in keywords:
-            report += self._search_keyword(keyword.strip(), before, after)
+        report = \
+            '<html>' + \
+            '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />' + \
+            '<head>' + \
+            '<title>Aftonbladet articles for keywords ' + ', '.join(keywords) + '</title>' + \
+            '</head>' + \
+            '<body>'
 
-        return report
+        for keyword in keywords:
+            self._search_keyword(keyword.strip(), before, after)
+
+        for _key, a in self._articles.items():
+            report += \
+            '<table CELLPADDING=6 RULES=GROUPS  FRAME=BOX>' + \
+            '<tr>' + \
+            '<td>Titel:</td>' + \
+            '<td>' + a['title'] + '</td>' + \
+            '</tr>' + \
+            '<tr>' + \
+            '<td>Skapad:</td>' + \
+            '<td>' + self._dstr(a['created']) + '</td>' + \
+            '</tr>' + \
+            '<tr>' + \
+            '<td>Senast uppdaterad:</td>' + \
+            '<td>' + self._dstr(a['updated']) + '</td>' + \
+            '</tr>' + \
+            '<tr>' + \
+            '<td>Källa:</td>' + \
+            '<td><i><a href="' + a['url'] + '">' + a['url'] + '</a></i></td>' + \
+            '</tr>' + \
+            '<tr>' + \
+            '<td>Hämtad:</td>' + \
+            '<td>' + self._dstr(a['fetched']) + ' </td>' + \
+            '</tr>' + \
+            '<tr>' + \
+            '<td>Nyckelord:</td>' + \
+            '<td>' + ', '.join(a['keywords']) + ' </td>' + \
+            '</table>' + \
+            a['lead'] + \
+            a['body'] + \
+            a['author'] + ' ' + self._render_email(a['email']) + \
+            '<p style="page-break-before: always">'
+
+        report += \
+            '</body>' + \
+            '</html>'
+
+        report_text, errors = tidylib.tidy_document(report)
+
+        return report_text
 
     def _parsedate(self, s):
         d = dateutil.parser.parse(s, fuzzy=True)
@@ -127,51 +170,32 @@ class Scraper(object):
             return l[0]
         return ''
 
-    def _get_article(self, url, title, created, updated, keywords):
+    def _get_article(self, url, title, created, updated, keyword):
         r = requests.get(url)
         soup = bs4.BeautifulSoup(r.text)
         lead = soup.find('div', {'class': 'abLeadText'})
         body = soup.find_all('div', {'class': 'abBodyText'})
-        address = soup.find('address')
+        author = soup.find('address')
 
-        anchor = address.find('a')
+        anchor = author.find('a')
         email = ''
         if anchor.attrs.has_key('href'):
             email = self._extract_email_address(anchor['href'])
 
-        return \
-            '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />' + \
-            '<head>' + \
-            '<title>' + title + '</title>' + \
-            '</head>' + \
-            '<body>' + \
-            '<table CELLPADDING=6 RULES=GROUPS  FRAME=BOX>' + \
-            '<tr>' + \
-            '<td>Titel:</td>' + \
-            '<td>' + title + '</td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Skapad:</td>' + \
-            '<td>' + self._dstr(created) + '</td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Senast uppdaterad:</td>' + \
-            '<td>' + self._dstr(updated) + '</td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Källa:</td>' + \
-            '<td><i><a href="' + url + '">' + url + '</a></i></td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Hämtad:</td>' + \
-            '<td>' + self._dstr(datetime.datetime.now(self._stockholm)) + ' </td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Nyckelord:</td>' + \
-            '<td>' + keywords + ' </td>' + \
-            '</table>' + \
-            self._tostring(lead) + \
-            self._tostring(body) + \
-            self._tostring(address) + ' ' + email + \
-            '<p style="page-break-before: always">'
+
+        if url in self._articles:
+            self._articles['keywords'].append(keyword)
+        else:
+            self._articles[url] = {
+                'title':     title,
+                'created':   created,
+                'updated':   updated,
+                'url':       url,
+                'fetched':   datetime.datetime.now(self._stockholm),
+                'keywords':  [keyword],
+                'lead':      self._tostring(lead),
+                'body':      self._tostring(body),
+                'author':    self._tostring(author),
+                'email':     email,
+            }
 
