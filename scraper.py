@@ -47,37 +47,47 @@ class Scraper(object):
         self._articles = {}
 
     def _search_keyword(self, keyword, before, after):
-        r = requests.get(self._urlbase + keyword)
-        html = r.text
-        soup = bs4.BeautifulSoup(html)
-        pretty = soup.prettify()
-        soup = bs4.BeautifulSoup(pretty)
+        index = 0
+        article_found = True
 
-        ol = soup.find('ol', {'id': 'searchResultList'})
-        articles = ''
+        while article_found:
+            r = requests.get(self._urlbase + keyword + '&start=' + str(index))
 
-        items = ol.find_all('li')
+            html = r.text
+            soup = bs4.BeautifulSoup(html)
+            pretty = soup.prettify()
+            soup = bs4.BeautifulSoup(pretty)
 
-        # Prepare for later version where there can be multiple keywords.
-        # One idea is to use the URL as the key in a dict, so multiple
-        # hits can be found. If a hit is found, only the current keyword
-        # needs to be added.
+            ol = soup.find('ol', {'id': 'searchResultList'})
 
-        for li in items:
-            item = {}
+            items = ol.find_all('li')
 
-            link = li.find('a')
-            spans = li.find_all('span')
-            category = spans[0]
-            is_article = 'resultInfo' == category.get('class')[0]
+            # Prepare for later version where there can be multiple keywords.
+            # One idea is to use the URL as the key in a dict, so multiple
+            # hits can be found. If a hit is found, only the current keyword
+            # needs to be added.
 
-            if is_article:
-                timestamps = spans[1]
-                created, updated = self._get_created_updated(timestamps.text)
-                if created >= after and created < before:
-                    title = link.contents[0].encode('utf-8').strip()
-                    url = link.get('href').strip()
-                    self._get_article(url, title, created, updated, keyword)
+            article_found = False
+            for li in items:
+                item = {}
+
+                link = li.find('a')
+                spans = li.find_all('span')
+                category = spans[0]
+                is_article = 'resultInfo' == category.get('class')[0]
+
+                if is_article:
+                    timestamps = spans[1]
+                    created, updated = self._get_created_updated(timestamps.text)
+                    if created >= after and created < before:
+                        title = link.contents[0].encode('utf-8').strip()
+                        url = link.get('href').strip()
+                        self._get_article(url, title, created, updated, keyword)
+                        article_found = True
+                        # Step out of loop, so we can restart search on next index...
+                        time.sleep(1) # Sleep to not hammer the web server - be polite
+                        break
+            index += 1
 
     def _render_email(self, email):
         return '<a href="mailto:' + email + '">' + email + '</a>'
@@ -182,9 +192,8 @@ class Scraper(object):
         if anchor.attrs.has_key('href'):
             email = self._extract_email_address(anchor['href'])
 
-
         if url in self._articles:
-            self._articles['keywords'].append(keyword)
+            self._articles[url]['keywords'].append(keyword)
         else:
             self._articles[url] = {
                 'title':     title,
