@@ -54,8 +54,13 @@ class Scraper(object):
         while we_may_still_find_what_we_are_looking_for:
             url = self._urlbase + keyword + '&start=' + str(index)
             print(url)
-            r = requests.get(self._urlbase + keyword + '&start=' + str(index))
-            time.sleep(1) # Sleep to not hammer the web server - be polite
+            try:
+                r = requests.get(self._urlbase + keyword + '&start=' + str(index))
+            except ConnectionError as e:
+                print(e)
+                time.sleep(60)
+                break
+            time.sleep(2) # Sleep to not hammer the web server - be polite
 
             html = r.text
             soup = bs4.BeautifulSoup(html)
@@ -91,7 +96,7 @@ class Scraper(object):
                         url = link.get('href').strip()
                         self._get_article(url, title, created, updated, keyword)
                         # Step out of loop, so we can restart search on next index...
-                        time.sleep(0.5) # Sleep to not hammer the web server - be polite
+                        time.sleep(2) # Sleep to not hammer the web server - be polite
                         break
             index += 1
 
@@ -189,7 +194,14 @@ class Scraper(object):
         return ''
 
     def _get_article(self, url, title, created, updated, keyword):
-        r = requests.get(url)
+        request_done = False
+        while not request_done:
+            try:
+                r = requests.get(url)
+                request_done = True
+            except ConnectionError as e:
+                print(r)
+
         soup = bs4.BeautifulSoup(r.text)
         lead = soup.find('div', {'class': 'abLeadText'})
         body = soup.find_all('div', {'class': 'abBodyText'})
