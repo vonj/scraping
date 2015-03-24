@@ -46,6 +46,7 @@ class Scraper(object):
 
         self._urlbase = 'http://sok.aftonbladet.se/?sortBy=pubDate&q='
         self._articles = {}
+        self._keywords = {}
 
     def _search_keyword(self, keyword, before, after):
         index = 0
@@ -60,7 +61,7 @@ class Scraper(object):
                 print(e)
                 time.sleep(60)
                 break
-            time.sleep(2) # Sleep to not hammer the web server - be polite
+            time.sleep(0.1) # Sleep to not hammer the web server - be polite
 
             html = r.text
             soup = bs4.BeautifulSoup(html)
@@ -96,7 +97,7 @@ class Scraper(object):
                         url = link.get('href').strip()
                         self._get_article(url, title, created, updated, keyword)
                         # Step out of loop, so we can restart search on next index...
-                        time.sleep(2) # Sleep to not hammer the web server - be polite
+                        time.sleep(0.1) # Sleep to not hammer the web server - be polite
                         break
             index += 1
 
@@ -104,16 +105,37 @@ class Scraper(object):
         return '<a href="mailto:' + email + '">' + email + '</a>'
 
     def search_keywords(self, keywords, before, after):
+        # Gather data
+        for keyword in keywords:
+            self._search_keyword(keyword.strip(), before, after)
+
+        # Build report
         report = \
             '<html>' + \
             '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />' + \
             '<head>' + \
             '<title>Aftonbladet articles for keywords ' + ', '.join(keywords) + '</title>' + \
             '</head>' + \
-            '<body>'
+            '<body>' + \
+            '<table CELLPADDING=6 RULES=GROUPS  FRAME=BOX>'
 
-        for keyword in keywords:
-            self._search_keyword(keyword.strip(), before, after)
+        sup = True
+        for keyword, props in self._keywords.items():
+            report += \
+                '<tr>' + \
+                '<td>' + keyword + '</td>' + \
+                '<td><' + su + '>' + ' '.join(props['url']) + '</' + su + '></td>' + \
+                '</tr>'
+            sup = not sup
+            if sup:
+                su = 'sup'
+            else:
+                su = 'sub'
+                
+
+        report += \
+            '</table>' + \
+            '<p style="page-break-before: always" />'
 
         for _key, a in self._articles.items():
             report += \
@@ -145,7 +167,7 @@ class Scraper(object):
             a['lead'] + \
             a['body'] + \
             a['author'] + ' ' + self._render_email(a['email']) + \
-            '<p style="page-break-before: always">'
+            '<p style="page-break-before: always" />'
 
         report += \
             '</body>' + \
@@ -199,7 +221,7 @@ class Scraper(object):
             try:
                 r = requests.get(url)
                 request_done = True
-            except ConnectionError as e:
+            except requests.exceptions.ConnectionError as e:
                 print(r)
 
         soup = bs4.BeautifulSoup(r.text)
@@ -212,6 +234,11 @@ class Scraper(object):
             anchor = author.find('a')
             if anchor and anchor.attrs.has_key('href'):
                 email = self._extract_email_address(anchor['href'])
+
+        if keyword not in self._keywords:
+            self._keywords[keyword] = {'url': []}
+        if url not in self._keywords[keyword]['url']:
+            self._keywords[keyword]['url'].append(url)
 
         if url in self._articles:
             if keyword not in self._articles[url]['keywords']:
