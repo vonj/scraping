@@ -1,3 +1,4 @@
+from __future__ import print_function
 # -*- coding: utf8 -*-
 import tidylib
 import bs4
@@ -48,10 +49,13 @@ class Scraper(object):
 
     def _search_keyword(self, keyword, before, after):
         index = 0
-        article_found = True
+        we_may_still_find_what_we_are_looking_for = True
 
-        while article_found:
+        while we_may_still_find_what_we_are_looking_for:
+            url = self._urlbase + keyword + '&start=' + str(index)
+            print(url)
             r = requests.get(self._urlbase + keyword + '&start=' + str(index))
+            time.sleep(1) # Sleep to not hammer the web server - be polite
 
             html = r.text
             soup = bs4.BeautifulSoup(html)
@@ -59,15 +63,13 @@ class Scraper(object):
             soup = bs4.BeautifulSoup(pretty)
 
             ol = soup.find('ol', {'id': 'searchResultList'})
+            if ol is None:
+                break
 
             items = ol.find_all('li')
 
-            # Prepare for later version where there can be multiple keywords.
-            # One idea is to use the URL as the key in a dict, so multiple
-            # hits can be found. If a hit is found, only the current keyword
-            # needs to be added.
-
-            article_found = False
+            # By default try to give up:
+            we_may_still_find_what_we_are_looking_for = False
             for li in items:
                 item = {}
 
@@ -77,15 +79,19 @@ class Scraper(object):
                 is_article = 'resultInfo' == category.get('class')[0]
 
                 if is_article:
+                    # A search result! We may yet prevail!
+                    we_may_still_find_what_we_are_looking_for = True
                     timestamps = spans[1]
                     created, updated = self._get_created_updated(timestamps.text)
+                    if created < after:
+                        # Alas, results are too old.
+                        we_may_still_find_what_we_are_looking_for = False
                     if created >= after and created < before:
                         title = link.contents[0].encode('utf-8').strip()
                         url = link.get('href').strip()
                         self._get_article(url, title, created, updated, keyword)
-                        article_found = True
                         # Step out of loop, so we can restart search on next index...
-                        time.sleep(1) # Sleep to not hammer the web server - be polite
+                        time.sleep(0.5) # Sleep to not hammer the web server - be polite
                         break
             index += 1
 
@@ -165,7 +171,9 @@ class Scraper(object):
         return created, updated
 
     def _tostring(self, resultset):
-        s = u''
+        if not resultset:
+            return ''
+        s = ''
         for r in resultset:
             s += str(r)
         return s
@@ -185,15 +193,17 @@ class Scraper(object):
         soup = bs4.BeautifulSoup(r.text)
         lead = soup.find('div', {'class': 'abLeadText'})
         body = soup.find_all('div', {'class': 'abBodyText'})
-        author = soup.find('address')
-
-        anchor = author.find('a')
         email = ''
-        if anchor.attrs.has_key('href'):
-            email = self._extract_email_address(anchor['href'])
+
+        author = soup.find('address')
+        if author:
+            anchor = author.find('a')
+            if anchor and anchor.attrs.has_key('href'):
+                email = self._extract_email_address(anchor['href'])
 
         if url in self._articles:
-            self._articles[url]['keywords'].append(keyword)
+            if keyword not in self._articles[url]['keywords']:
+                self._articles[url]['keywords'].append(keyword)
         else:
             self._articles[url] = {
                 'title':     title,
