@@ -1,5 +1,6 @@
+#!/usr/local/bin/python
+# vim: set fileencoding=utf8 :
 from __future__ import print_function
-# -*- coding: utf8 -*-
 import tidylib
 import bs4
 import requests
@@ -11,10 +12,18 @@ import dateutil.parser
 import datetime
 import pytz
 import time
+import cachecontrol
+
+
 
 
 class Scraper(object):
-    def __init__(self):
+    def __init__(self, grace=0):
+        self._proxies = {
+            'http': 'http://127.0.0.1:3128'
+        }
+
+        self._grace = grace
         reload(sys)
         sys.setdefaultencoding('UTF-8')
         self._stockholm = pytz.timezone('Europe/Stockholm')
@@ -47,6 +56,8 @@ class Scraper(object):
         self._urlbase = 'http://sok.aftonbladet.se/?sortBy=pubDate&q='
         self._articles = {}
         self._keywords = {}
+        sess = requests.session()
+        self._cached_sess = cachecontrol.CacheControl(sess)
 
     def _search_keyword(self, keyword, before, after):
         index = 0
@@ -56,12 +67,17 @@ class Scraper(object):
             url = self._urlbase + keyword + '&start=' + str(index)
             print(url)
             try:
-                r = requests.get(self._urlbase + keyword + '&start=' + str(index))
-            except ConnectionError as e:
+                r = self._cached_sess.get(
+                    self._urlbase +
+                    keyword +
+                    '&start=' +
+                    str(index),
+                    proxies=self._proxies)
+            except requests.exceptions.ConnectionError as e:
                 print(e)
                 time.sleep(60)
                 break
-            time.sleep(0.1) # Sleep to not hammer the web server - be polite
+            time.sleep(self._grace) # Sleep to not hammer the web server - be polite
 
             html = r.text
             soup = bs4.BeautifulSoup(html)
@@ -97,7 +113,7 @@ class Scraper(object):
                         url = link.get('href').strip()
                         self._get_article(url, title, created, updated, keyword)
                         # Step out of loop, so we can restart search on next index...
-                        time.sleep(0.1) # Sleep to not hammer the web server - be polite
+                        time.sleep(self._grace) # Sleep to not hammer the web server - be polite
                         break
             index += 1
 
@@ -110,28 +126,30 @@ class Scraper(object):
             self._search_keyword(keyword.strip(), before, after)
 
         # Build report
-        report = \
-            '<html>' + \
-            '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />' + \
-            '<head>' + \
-            '<title>Aftonbladet articles for keywords ' + ', '.join(keywords) + '</title>' + \
-            '</head>' + \
-            '<body>' + \
-            '<table CELLPADDING=6 RULES=GROUPS  FRAME=BOX>'
+        report = '''
+<html>
+ <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <head>
+   <style>
+    body {
+      line-height: 1.0;
+    }
+   </style>''' + \
+   '<title>Aftonbladet articles for keywords ' + ', '.join(keywords) + '</title>' + '''
+  </head>
+  <body>
+   <table BORDER=1 RULES=ALL FRAME=VOID>'''
 
-        sup = True
         for keyword, props in self._keywords.items():
             report += \
                 '<tr>' + \
                 '<td>' + keyword + '</td>' + \
-                '<td><' + su + '>' + ' '.join(props['url']) + '</' + su + '></td>' + \
+                '<td>'
+            for url in props['url']:
+                report += ' <small><a href="' + url + '">' + url + '</a></small> '
+            report += \
+                '</td>' + \
                 '</tr>'
-            sup = not sup
-            if sup:
-                su = 'sup'
-            else:
-                su = 'sub'
-                
 
         report += \
             '</table>' + \
@@ -219,7 +237,7 @@ class Scraper(object):
         request_done = False
         while not request_done:
             try:
-                r = requests.get(url)
+                r = self._cached_sess.get(url)
                 request_done = True
             except requests.exceptions.ConnectionError as e:
                 print(r)
@@ -251,8 +269,8 @@ class Scraper(object):
                 'url':       url,
                 'fetched':   datetime.datetime.now(self._stockholm),
                 'keywords':  [keyword],
-                'lead':      self._tostring(lead),
-                'body':      self._tostring(body),
+                'lead':      '<small>' + self._tostring(lead) + '</small>',
+                'body':      '<small>' + self._tostring(body) + '</small>',
                 'author':    self._tostring(author),
                 'email':     email,
             }
