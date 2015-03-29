@@ -13,15 +13,30 @@ import datetime
 import pytz
 import time
 import cachecontrol
-
+import html2text
 
 
 
 class Scraper(object):
-    def __init__(self, grace=0):
+    def __init__(self, grace=0, publication=''):
+        if publication == 'aftonbladet.se':
+            self._search_keyword = self._search_keyword_aftonbladet
+        elif publication == 'idg.se':
+            self._search_keyword = self._search_keyword_idg
+        else:
+            raise ValueError('Publication "' +
+                             publication +
+                             '" not supported for scraping')
+
         self._proxies = {
             'http': 'http://127.0.0.1:3128'
         }
+        self._publication = publication
+        self._html2text = html2text.HTML2Text()
+        self._html2text.ignore_links = True
+        self._html2text.ignore_images = True
+        self._html2text.body_width = 78
+        self._html2text.images_to_alt = True
 
         self._grace = grace
         reload(sys)
@@ -59,7 +74,7 @@ class Scraper(object):
         sess = requests.session()
         self._cached_sess = cachecontrol.CacheControl(sess)
 
-    def _search_keyword(self, keyword, before, after):
+    def _search_keyword_aftonbladet(self, keyword, before, after):
         index = 0
         we_may_still_find_what_we_are_looking_for = True
 
@@ -120,6 +135,8 @@ class Scraper(object):
     def _render_email(self, email):
         return '<a href="mailto:' + email + '">' + email + '</a>'
 
+
+
     def search_keywords(self, keywords, before, after):
         # Gather data
         for keyword in keywords:
@@ -160,7 +177,7 @@ class Scraper(object):
             '<table CELLPADDING=6 RULES=GROUPS  FRAME=BOX>' + \
             '<tr>' + \
             '<td>Titel:</td>' + \
-            '<td>' + a['title'] + '</td>' + \
+            '<td><b>' + a['title'] + '</b></td>' + \
             '</tr>' + \
             '<tr>' + \
             '<td>Skapad:</td>' + \
@@ -184,7 +201,8 @@ class Scraper(object):
             '</table>' + \
             a['lead'] + \
             a['body'] + \
-            a['author'] + ' ' + self._render_email(a['email']) + \
+            a['author'] + \
+            self._render_email(a['author_email']) + \
             '<p style="page-break-before: always" />'
 
         report += \
@@ -245,6 +263,7 @@ class Scraper(object):
         soup = bs4.BeautifulSoup(r.text)
         lead = soup.find('div', {'class': 'abLeadText'})
         body = soup.find_all('div', {'class': 'abBodyText'})
+        author = ''
         email = ''
 
         author = soup.find('address')
@@ -252,6 +271,7 @@ class Scraper(object):
             anchor = author.find('a')
             if anchor and anchor.attrs.has_key('href'):
                 email = self._extract_email_address(anchor['href'])
+                author = self._html2text.handle(self._tostring(anchor)),
 
         if keyword not in self._keywords:
             self._keywords[keyword] = {'url': []}
@@ -262,16 +282,21 @@ class Scraper(object):
             if keyword not in self._articles[url]['keywords']:
                 self._articles[url]['keywords'].append(keyword)
         else:
+            leadtext = self._tostring(lead)
+            bodytext = self._tostring(body)
+            fulltext = leadtext + bodytext
             self._articles[url] = {
-                'title':     title,
-                'created':   created,
-                'updated':   updated,
-                'url':       url,
-                'fetched':   datetime.datetime.now(self._stockholm),
-                'keywords':  [keyword],
-                'lead':      '<small>' + self._tostring(lead) + '</small>',
-                'body':      '<small>' + self._tostring(body) + '</small>',
-                'author':    self._tostring(author),
-                'email':     email,
+                'title':          title,
+                'created':        created,
+                'updated':        updated,
+                'url':            url,
+                'fetched':        datetime.datetime.now(self._stockholm),
+                'keywords':       [keyword],
+                'lead':           '<small>' + self._tostring(lead) + '</small>',
+                'body':           '<small>' + self._tostring(body) + '</small>',
+                'author':         self._tostring(author),
+                'author_email':   email,
+                'publication':    'aftonbladet.se',
+                'fulltext_plain': self._html2text.handle(fulltext),
             }
 
