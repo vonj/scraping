@@ -14,11 +14,13 @@ import pytz
 import time
 import cachecontrol
 import html2text
+import xlsxwriter
 
 
 
 class Scraper(object):
     def __init__(self, grace=0, publication=''):
+        self._publication = publication
         if publication == 'aftonbladet.se':
             self._search_keyword = self._search_keyword_aftonbladet
         elif publication == 'idg.se':
@@ -136,13 +138,31 @@ class Scraper(object):
         return '<a href="mailto:' + email + '">' + email + '</a>'
 
 
-
-    def search_keywords(self, keywords, before, after):
+    def generate_report(self, keywords, before, after):
         # Gather data
         for keyword in keywords:
             self._search_keyword(keyword.strip(), before, after)
 
-        # Build report
+        # Build Excel report
+        workbook = xlsxwriter.Workbook(self._publication + '.xlsx')
+        fmt = workbook.add_format({'bold': True, 'font_name': 'Verdana'})
+        sheet = workbook.add_worksheet('Data')
+        col = 0
+        for rowname in ['#',
+                        'fetched',
+                        'keywords',
+                        'publication',
+                        'date',
+                        'updated',
+                        'author',
+                        'author_email',
+                        'url',
+                        'title',
+                        'fulltext_plain']:
+            sheet.write(0, col, rowname, fmt)
+            col += 1
+
+        # Build HTML report
         report = '''
 <html>
  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
@@ -151,16 +171,23 @@ class Scraper(object):
     body {
       line-height: 1.0;
     }
-   </style>''' + \
-   '<title>Aftonbladet articles for keywords ' + ', '.join(keywords) + '</title>' + '''
+   </style>
   </head>
   <body>
-   <table BORDER=1 RULES=ALL FRAME=VOID>'''
+   Sökning på ''' + self._publication + ' från ' + \
+    str(after.date()) + ' till ' + str(before.date()) + \
+''', med nyckelord enligt tabellen:
+   <table BORDER="1" RULES=ALL FRAME=VOID CELLPADDING="10">
+    <tr>
+     <th>Nyckelord</th>
+     <th>Matchande länkar</th>
+    </tr>
+'''
 
         for keyword, props in self._keywords.items():
             report += \
                 '<tr>' + \
-                '<td>' + keyword + '</td>' + \
+                '<td><small>' + keyword + '</small></td>' + \
                 '<td>'
             for url in props['url']:
                 report += ' <small><a href="' + url + '">' + url + '</a></small> '
@@ -172,7 +199,33 @@ class Scraper(object):
             '</table>' + \
             '<p style="page-break-before: always" />'
 
+        row = 1
+        sheet.set_column(0, 0, 1)
+        sheet.set_column(1, 1, 29)
+        sheet.set_column(2, 2, 30)
+        sheet.set_column(3, 3, 12)
+        sheet.set_column(4, 4, 22)
+        sheet.set_column(5, 5, 22)
+        sheet.set_column(6, 6, 21)
+        sheet.set_column(7, 7, 35)
+        sheet.set_column(8, 8, 70)
+        sheet.set_column(9, 9, 70)
+        sheet.set_column(10, 10, 240)
         for _key, a in self._articles.items():
+            keywords = ', '.join(a['keywords'])
+
+            sheet.write(row,  0, row)
+            sheet.write(row,  1, a['fetched'].isoformat())
+            sheet.write(row,  2, keywords)
+            sheet.write(row,  3, self._publication)
+            sheet.write(row,  4, a['created'].isoformat())
+            sheet.write(row,  5, a['updated'].isoformat())
+            sheet.write(row,  6, self._html2text.handle(a['author']))
+            sheet.write(row,  7, a['author_email'])
+            sheet.write(row,  8, a['url'])
+            sheet.write(row,  9, a['title'].replace('\n', ' '))
+            sheet.write(row, 10, a['fulltext_plain'].replace('\n', ' '))
+
             report += \
             '<table CELLPADDING=6 RULES=GROUPS  FRAME=BOX>' + \
             '<tr>' + \
@@ -197,7 +250,7 @@ class Scraper(object):
             '</tr>' + \
             '<tr>' + \
             '<td>Nyckelord:</td>' + \
-            '<td>' + ', '.join(a['keywords']) + ' </td>' + \
+            '<td>' + keywords + ' </td>' + \
             '</table>' + \
             a['lead'] + \
             a['body'] + \
@@ -205,11 +258,15 @@ class Scraper(object):
             self._render_email(a['author_email']) + \
             '<p style="page-break-before: always" />'
 
+            row += 1
+
         report += \
             '</body>' + \
             '</html>'
 
         report_text, errors = tidylib.tidy_document(report)
+
+        workbook.close()
 
         return report_text
 
