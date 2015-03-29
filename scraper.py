@@ -23,6 +23,7 @@ class Scraper(object):
         self._publication = publication
         if publication == 'aftonbladet.se':
             self._search_keyword = self._search_keyword_aftonbladet
+            self._urlbase = 'http://sok.aftonbladet.se/?sortBy=pubDate&q='
         elif publication == 'idg.se':
             self._search_keyword = self._search_keyword_idg
         else:
@@ -70,7 +71,6 @@ class Scraper(object):
         tidylib.BASE_OPTIONS['wrap-script-literals'] = 1
         tidylib.BASE_OPTIONS['char-encoding'] = 'latin1'
 
-        self._urlbase = 'http://sok.aftonbladet.se/?sortBy=pubDate&q='
         self._articles = {}
         self._keywords = {}
         sess = requests.session()
