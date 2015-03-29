@@ -43,11 +43,11 @@ kws = ['cyberkrim',
     'pirater',
     'förtal']
 
-sh = ['itbrott', 'IT-relaterad brottslighet']
+shortlist = ['itbrott', 'IT-relaterad brottslighet']
 
-sc = scraper.Scraper()
+sc = scraper.Scraper(publication='aftonbladet.se')
 
-report = sc.search_keywords(kws,
+report = sc.search_keywords(shortlist,
                             before=datetime.datetime(2015, 1, 1, 0, 0, tzinfo=stockholm),
                             after=datetime.datetime(2013, 1, 1, 0, 0, tzinfo=stockholm))
 
