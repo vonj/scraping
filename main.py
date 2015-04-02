@@ -13,38 +13,46 @@ sys.setdefaultencoding('UTF-8')
 
 stockholm=pytz.timezone('Europe/Stockholm')
 
-kws = ['cyberkrim',
+kws = [
     'hets mot folkgrupp',
     'itbrott',
     'IT-brott',
+    'ITbrott',
+    'cyberkrim',
     'cybercrime',
+    'cyber-crime',
     'cyberbrott',
-    'cyberbrottslighet',
-    'IT-brottslighet',
-    'ITbrottslighet',
+    'cyber-brott',
     'IT-relaterade brott',
-    'IT-relaterad brottslighet',
-    'dataintrång',
-    'datorbedrägeri',
+    'IT-relaterad brott',
     'datorintrång',
-    'barnpornografibrott',
+    'dator-intrång',
+    'dataintrång',
+    'data-intrång',
+    'datorbedrägeri',
+    'databedrägeri',
+    'barnporno',
     'näthat',
-    'bedrägeri',
+    'nät-hat',
     'gromning',
-    'grooming',
+    'groom',
     'phishing',
+    'phishning',
     'skimming',
     'skimmning',
     'hacking',
     'hackning',
-    'intrång',
     'trojan',
     'cracking',
-    'cyberterrorism',
+    'cracker',
+    'hacker',
+    'cyberterror',
+    'cyber-terror',
     'pirater',
-    'förtal']
+    'förtal'
+]
 
-shortlist = ['itbrott', 'IT-relaterad brottslighet']
+sh = ['itbrott', 'IT-relaterad brottslighet']
 
 
 if len(sys.argv) < 2:
@@ -55,7 +63,7 @@ publication = sys.argv[1]
 
 sc = scraper.Scraper(publication=publication)
 
-report = sc.generate_report(shortlist,
+report = sc.generate_report(sh,
                             before=datetime.datetime(2015, 1, 1, 0, 0, tzinfo=stockholm),
                             after=datetime.datetime(2013, 1, 1, 0, 0, tzinfo=stockholm))
 

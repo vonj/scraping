@@ -15,6 +15,7 @@ import time
 import cachecontrol
 import html2text
 import xlsxwriter
+import savReaderWriter
 
 
 
@@ -137,136 +138,183 @@ class Scraper(object):
     def _render_email(self, email):
         return '<a href="mailto:' + email + '">' + email + '</a>'
 
-
     def generate_report(self, keywords, before, after):
-        # Gather data
-        for keyword in keywords:
-            self._search_keyword(keyword.strip(), before, after)
+        spss_types = {
+            'idx': 0,
+            'fetched': 34,
+            'keywords': 150,
+            'publication': 30,
+            'date': 34,
+            'updated': 34,
+            'author': 50,
+            'author_email': 50,
+            'url': 100,
+            'title': 140,
+            'fulltext_plain': 10000,
+        }
 
-        # Build Excel report
-        workbook = xlsxwriter.Workbook(self._publication + '.xlsx')
-        fmt = workbook.add_format({'bold': True, 'font_name': 'Verdana'})
-        sheet = workbook.add_worksheet('Data')
-        col = 0
-        for rowname in ['#',
-                        'fetched',
-                        'keywords',
-                        'publication',
-                        'date',
-                        'updated',
-                        'author',
-                        'author_email',
-                        'url',
-                        'title',
-                        'fulltext_plain']:
-            sheet.write(0, col, rowname, fmt)
-            col += 1
+        rownames = [
+            'idx',
+            'fetched',
+            'keywords',
+            'publication',
+            'date',
+            'updated',
+            'author',
+            'author_email',
+            'url',
+            'title',
+            'fulltext_plain',
+        ]
 
-        # Build HTML report
-        report = '''
-<html>
- <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <head>
-   <style>
-    body {
-      line-height: 1.0;
-    }
-   </style>
-  </head>
-  <body>
-   Sökning på ''' + self._publication + ' från ' + \
-    str(after.date()) + ' till ' + str(before.date()) + \
-''', med nyckelord enligt tabellen:
-   <table BORDER="1" RULES=ALL FRAME=VOID CELLPADDING="10">
-    <tr>
-     <th>Nyckelord</th>
-     <th>Matchande länkar</th>
-    </tr>
-'''
+        with savReaderWriter.SavWriter(
+            self._publication + '.sav',
+            rownames,
+            spss_types,
+            ioUtf8=True,
+        ) as SPSSwriter:
+            # Gather data
+            for keyword in keywords:
+                self._search_keyword(keyword.strip(), before, after)
 
-        for keyword, props in self._keywords.items():
+            # Build Excel report
+            workbook = xlsxwriter.Workbook(self._publication + '.xlsx')
+            fmt = workbook.add_format({'bold': True, 'font_name': 'Verdana'})
+            sheet = workbook.add_worksheet('Data')
+            col = 0
+            for rowname in rownames:
+                sheet.write(0, col, rowname, fmt)
+                col += 1
+
+            # Build HTML report
+            report = '''
+    <html>
+     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+      <head>
+       <style>
+        body {
+          line-height: 1.0;
+        }
+       </style>
+      </head>
+      <body>
+       Sökning på ''' + self._publication + ' från ' + \
+        str(after.date()) + ' till ' + str(before.date()) + \
+    ''', med nyckelord enligt tabellen:
+       <table BORDER="1" RULES=ALL FRAME=VOID CELLPADDING="10">
+        <tr>
+         <th>Nyckelord</th>
+         <th>Matchande länkar</th>
+        </tr>
+    '''
+
+            for keyword, props in self._keywords.items():
+                report += \
+                    '<tr>' + \
+                    '<td><small>' + keyword + '</small></td>' + \
+                    '<td>'
+                for url in props['url']:
+                    report += ' <small><a href="' + url + '">' + url + '</a></small> '
+                report += \
+                    '</td>' + \
+                    '</tr>'
+
             report += \
+                '</table>' + \
+                '<p style="page-break-before: always" />'
+
+            sheet.set_column(0, 0, 10)
+            sheet.set_column(1, 1, 29)
+            sheet.set_column(2, 2, 30)
+            sheet.set_column(3, 3, 12)
+            sheet.set_column(4, 4, 22)
+            sheet.set_column(5, 5, 22)
+            sheet.set_column(6, 6, 21)
+            sheet.set_column(7, 7, 35)
+            sheet.set_column(8, 8, 70)
+            sheet.set_column(9, 9, 70)
+            sheet.set_column(10, 10, 240)
+
+            row = 0
+            for _key, a in self._articles.items():
+
+                fetched = a['fetched'].isoformat()
+                keywords = ', '.join(a['keywords'])
+                publication = self._publication
+                created = a['created'].isoformat()
+                updated = a['updated'].isoformat()
+                author = self._html2text.handle(a['author'])
+                author_email = a['author_email']
+                url = a['url']
+                title = a['title'].replace('\n', ' ')
+                fulltext_plain = a['fulltext_plain'].replace('\n', ' ')
+
+                row += 1
+                sheet.write(row,  0, row)
+                sheet.write(row,  1, fetched)
+                sheet.write(row,  2, keywords)
+                sheet.write(row,  3, self._publication)
+                sheet.write(row,  4, created)
+                sheet.write(row,  5, updated)
+                sheet.write(row,  6, author)
+                sheet.write(row,  7, author_email)
+                sheet.write(row,  8, url)
+                sheet.write(row,  9, title)
+                sheet.write(row, 10, fulltext_plain)
+
+                SPSSwriter.writerow([
+                    row,
+                    fetched,
+                    keywords,
+                    self._publication,
+                    created,
+                    updated,
+                    author,
+                    author_email,
+                    url,
+                    title,
+                    fulltext_plain,
+                ])
+
+                report += \
+                '<table CELLPADDING=6 RULES=GROUPS  FRAME=BOX>' + \
                 '<tr>' + \
-                '<td><small>' + keyword + '</small></td>' + \
-                '<td>'
-            for url in props['url']:
-                report += ' <small><a href="' + url + '">' + url + '</a></small> '
-            report += \
-                '</td>' + \
-                '</tr>'
-
-        report += \
-            '</table>' + \
-            '<p style="page-break-before: always" />'
-
-        row = 1
-        sheet.set_column(0, 0, 1)
-        sheet.set_column(1, 1, 29)
-        sheet.set_column(2, 2, 30)
-        sheet.set_column(3, 3, 12)
-        sheet.set_column(4, 4, 22)
-        sheet.set_column(5, 5, 22)
-        sheet.set_column(6, 6, 21)
-        sheet.set_column(7, 7, 35)
-        sheet.set_column(8, 8, 70)
-        sheet.set_column(9, 9, 70)
-        sheet.set_column(10, 10, 240)
-        for _key, a in self._articles.items():
-            keywords = ', '.join(a['keywords'])
-
-            sheet.write(row,  0, row)
-            sheet.write(row,  1, a['fetched'].isoformat())
-            sheet.write(row,  2, keywords)
-            sheet.write(row,  3, self._publication)
-            sheet.write(row,  4, a['created'].isoformat())
-            sheet.write(row,  5, a['updated'].isoformat())
-            sheet.write(row,  6, self._html2text.handle(a['author']))
-            sheet.write(row,  7, a['author_email'])
-            sheet.write(row,  8, a['url'])
-            sheet.write(row,  9, a['title'].replace('\n', ' '))
-            sheet.write(row, 10, a['fulltext_plain'].replace('\n', ' '))
+                '<td>Titel:</td>' + \
+                '<td><b>' + a['title'] + '</b></td>' + \
+                '</tr>' + \
+                '<tr>' + \
+                '<td>Skapad:</td>' + \
+                '<td>' + self._dstr(a['created']) + '</td>' + \
+                '</tr>' + \
+                '<tr>' + \
+                '<td>Senast uppdaterad:</td>' + \
+                '<td>' + self._dstr(a['updated']) + '</td>' + \
+                '</tr>' + \
+                '<tr>' + \
+                '<td>Källa:</td>' + \
+                '<td><i><a href="' + a['url'] + '">' + a['url'] + '</a></i></td>' + \
+                '</tr>' + \
+                '<tr>' + \
+                '<td>Hämtad:</td>' + \
+                '<td>' + self._dstr(a['fetched']) + ' </td>' + \
+                '</tr>' + \
+                '<tr>' + \
+                '<td>Nyckelord:</td>' + \
+                '<td>' + keywords + ' </td>' + \
+                '</table>' + \
+                a['lead'] + \
+                a['body'] + \
+                a['author'] + \
+                self._render_email(a['author_email']) + \
+                '<p style="page-break-before: always" />'
 
             report += \
-            '<table CELLPADDING=6 RULES=GROUPS  FRAME=BOX>' + \
-            '<tr>' + \
-            '<td>Titel:</td>' + \
-            '<td><b>' + a['title'] + '</b></td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Skapad:</td>' + \
-            '<td>' + self._dstr(a['created']) + '</td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Senast uppdaterad:</td>' + \
-            '<td>' + self._dstr(a['updated']) + '</td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Källa:</td>' + \
-            '<td><i><a href="' + a['url'] + '">' + a['url'] + '</a></i></td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Hämtad:</td>' + \
-            '<td>' + self._dstr(a['fetched']) + ' </td>' + \
-            '</tr>' + \
-            '<tr>' + \
-            '<td>Nyckelord:</td>' + \
-            '<td>' + keywords + ' </td>' + \
-            '</table>' + \
-            a['lead'] + \
-            a['body'] + \
-            a['author'] + \
-            self._render_email(a['author_email']) + \
-            '<p style="page-break-before: always" />'
+                '</body>' + \
+                '</html>'
 
-            row += 1
+            report_text, errors = tidylib.tidy_document(report)
 
-        report += \
-            '</body>' + \
-            '</html>'
-
-        report_text, errors = tidylib.tidy_document(report)
-
-        workbook.close()
+            workbook.close()
 
         return report_text
 
