@@ -82,12 +82,6 @@ class Scraper(object):
             print(url)
             try:
                 r = self._cached_sess.get(url, proxies=self._proxies)
-#                r = self._cached_sess.get(
-#                    url +
-#                    keyword +
-#                    '&start=' +
-#                    str(index),
-#                    proxies=self._proxies)
             except requests.exceptions.ConnectionError as e:
                 print(e)
                 time.sleep(60)
