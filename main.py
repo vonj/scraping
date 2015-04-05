@@ -51,18 +51,16 @@ kws = [
     'förtal'
 ]
 
-sh = ['itbrott', 'IT-relaterad brottslighet']
+sh = ['it-brott', 'IT-relaterad brottslighet']
 
 
 if len(sys.argv) < 1:
     sys.stderr.write('Usage: ' + sys.argv[0])
     sys.exit(1)
 
-sc = scraper.Scraper()
+sc = scraper.Scraper(0.3)
 
 before=datetime.datetime(2015, 1, 1, 0, 0, tzinfo=stockholm)
 after=datetime.datetime(2013, 1, 1, 0, 0, tzinfo=stockholm)
-
 report = sc.generate_reports(sh, before=before, after=after)
-
 
