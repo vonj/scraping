@@ -5,6 +5,7 @@ import datetime
 import scraper
 import pytz
 import sys
+import json
 
 reload(sys)
 sys.setdefaultencoding('UTF-8')
@@ -12,55 +13,21 @@ sys.setdefaultencoding('UTF-8')
 
 stockholm=pytz.timezone('Europe/Stockholm')
 
-kws = [
-    'hets mot folkgrupp',
-    'itbrott',
-    'IT-brott',
-    'ITbrott',
-    'cyberkrim',
-    'cybercrime',
-    'cyber-crime',
-    'cyberbrott',
-    'cyber-brott',
-    'IT-relaterade brott',
-    'IT-relaterad brott',
-    'datorintrång',
-    'dator-intrång',
-    'dataintrång',
-    'data-intrång',
-    'datorbedrägeri',
-    'databedrägeri',
-    'barnporno',
-    'näthat',
-    'nät-hat',
-    'gromning',
-    'groom',
-    'phishing',
-    'phishning',
-    'skimming',
-    'skimmning',
-    'hacking',
-    'hackning',
-    'trojan',
-    'cracking',
-    'cracker',
-    'hacker',
-    'cyberterror',
-    'cyber-terror',
-    'pirater',
-    'förtal'
-]
-
-sh = ['it-brott', 'IT-relaterad brottslighet']
-
-
-if len(sys.argv) < 1:
-    sys.stderr.write('Usage: ' + sys.argv[0])
+if len(sys.argv) < 2:
+    print(sys.argv)
+    sys.stderr.write('Usage: ' + sys.argv[0] + ' <config file with keywords in JSON array>')
     sys.exit(1)
 
-sc = scraper.Scraper(0.3)
+grace = 2.0
+if len(sys.argv) == 3:
+    grace = float(sys.argv[2])
+
+sc = scraper.Scraper(grace)
+
+with open(sys.argv[1]) as conf:
+    keywords = json.load(conf)
 
 before=datetime.datetime(2015, 1, 1, 0, 0, tzinfo=stockholm)
 after=datetime.datetime(2013, 1, 1, 0, 0, tzinfo=stockholm)
-report = sc.generate_reports(sh, before=before, after=after)
+report = sc.generate_reports(keywords, before=before, after=after)
 

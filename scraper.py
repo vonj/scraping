@@ -86,9 +86,6 @@ class Scraper(object):
                 time.sleep(60)
                 break
 
-            # Be polite
-            time.sleep(self._grace)
-
             html = r.text
             soup = bs4.BeautifulSoup(html)
             pretty = soup.prettify()
@@ -194,10 +191,15 @@ class Scraper(object):
         return '<a href="mailto:' + email + '">' + email + '</a>'
 
     def generate_reports(self, keywords, before, after):
-        reportbase = 'keywords_aftonbladet_idg_' + after.strftime('%Y-%m-%d') + '-' + before.strftime('%Y-%m-%d')
+        reportbase = 'keywords_aftonbladet_idg_' + after.strftime('%Y-%m-%d') + '_' + before.strftime('%Y-%m-%d')
 
         try:
             shutil.rmtree(reportbase)
+        except OSError:
+            pass
+
+        try:
+            shutil.rmtree(reportbase + '.zip')
         except OSError:
             pass
 
@@ -246,6 +248,14 @@ class Scraper(object):
                 ['wkhtmltopdf',
                 self._reportname + '.html',
                 self._reportname + '.pdf']
+            )
+            subprocess.call(
+                ['7z',
+                'a',
+                '-r',
+                '-mx=9',
+                reportbase + '.zip',
+                reportbase]
             )
 
     def _generate_report(self, keywords, before, after):
@@ -491,6 +501,9 @@ class Scraper(object):
     def _get_article_idg(self, url, publication, title, before, after, keyword):
         email = ''
 
+        # Be polite
+        time.sleep(self._grace)
+
         request_done = False
         while not request_done:
             try:
@@ -525,11 +538,11 @@ class Scraper(object):
             return False
 
         if created > before:
-            print('Too new, created: ', created)
+            print('Too new, created at: ', created)
             return False
 
         if created < after:
-            print('Too old, created: ', created)
+            print('Too old, created at: ', created)
             return False
 
         updated = created
