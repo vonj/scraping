@@ -71,7 +71,6 @@ class Scraper(object):
         self._cached_sess = cachecontrol.CacheControl(sess)
 
     def _search_keyword_idg(self, keyword, before, after, pageNr=1):
-        print('IDG stub search for ' + keyword)
         urlbase = 'http://www.idg.se/2.1085/1.50095?actionType=goToPage&articleType=0&publicationSelect=0&dateRange=4&sort=0'
         index = 0
         we_may_still_find_what_we_are_looking_for = True
@@ -81,7 +80,6 @@ class Scraper(object):
         while we_may_still_find_what_we_are_looking_for:
             try:
                 url = urlbase + '&queryText=' + keyword + '&pageNr=' + str(pageNr)
-                print('GETTING INDEX: ' + url)
                 r = self._cached_sess.get(url, proxies=self._proxies)
             except requests.exceptions.ConnectionError as e:
                 print(e)
@@ -116,15 +114,11 @@ class Scraper(object):
                         a = p.find('a')
                         if a:
                             publication = a.contents[0].encode('utf-8').strip().replace('\n', '')
-                            print(publication, ' <-------- ')
 
                     if url.find('queryText=') > 0:
                         if url[0:4] != 'http':
                             url = 'http://www.idg.se' + url
                         if url.find('\?'):
-                            print('GETTING ARTICLE: ' + url)
-                            print('title: ', title)
-                            print('pageNr: ', pageNr)
                             if url in urlmemory:
                                 print('  URL ' + url + ' is a duplicate, returning')
                                 return
@@ -259,7 +253,7 @@ class Scraper(object):
         for keyword in keywords:
             keyword = keyword.strip()
             self._search_keyword_idg(keyword, before, after)
-            #self._search_keyword_aftonbladet(keyword, before, after)
+            self._search_keyword_aftonbladet(keyword, before, after)
 
         # Build Excel report
         workbook = xlsxwriter.Workbook(self._reportname + '.xlsx')
@@ -529,16 +523,13 @@ class Scraper(object):
         if not created:
             print('No create date')
             return False
-        print('CREATED: ', created)
 
         if created > before:
-            print('created > ', created)
-            print('before ', before)
+            print('Too new, created: ', created)
             return False
 
         if created < after:
-            print('created < ', created)
-            print('after ', before)
+            print('Too old, created: ', created)
             return False
 
         updated = created
