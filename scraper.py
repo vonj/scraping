@@ -21,6 +21,8 @@ import shutil
 import subprocess
 from lxml.html import html5parser
 import markdown
+import json
+import urllib
 
 
 
@@ -71,6 +73,8 @@ class Scraper(object):
         self._cached_sess = cachecontrol.CacheControl(sess)
 
     def _search_keyword_idg(self, keyword, before, after, pageNr=1):
+        keyword_quoted = urllib.quote(keyword.encode('iso-8859-1'))
+
         urlbase = 'http://www.idg.se/2.1085/1.50095?actionType=goToPage&articleType=0&publicationSelect=0&dateRange=4&sort=0'
         index = 0
         we_may_still_find_what_we_are_looking_for = True
@@ -79,7 +83,7 @@ class Scraper(object):
         articlenotfound = 0
         while we_may_still_find_what_we_are_looking_for:
             try:
-                url = urlbase + '&queryText=' + keyword + '&pageNr=' + str(pageNr)
+                url = urlbase + '&queryText=' + keyword_quoted + '&pageNr=' + str(pageNr)
                 r = self._cached_sess.get(url, proxies=self._proxies)
             except requests.exceptions.ConnectionError as e:
                 print(e)
@@ -118,18 +122,19 @@ class Scraper(object):
                         if url.find('\?'):
                             if url in urlmemory:
                                 print('  URL ' + url + ' is a duplicate, returning')
-                                return
-                            urlmemory[url] = True
-                            if self._get_article_idg(url, publication, title, before, after, keyword):
-                                articlefound = True
+                                we_may_still_find_what_we_are_looking_for = False
+                            else:
+                                urlmemory[url] = True
+                                if self._get_article_idg(url, publication, title, before, after, keyword):
+                                    articlefound = True
                     i += 1
 
             if not articlefound:
                 articlenotfound += 1
 
-            if articlenotfound >= 2:
+            if articlenotfound >= 2 or pageNr > 100:
                 print('No article found - twice')
-                return
+                we_may_still_find_what_we_are_looking_for = False
 
             pageNr += 1
 
@@ -190,8 +195,11 @@ class Scraper(object):
     def _render_email(self, email):
         return '<a href="mailto:' + email + '">' + email + '</a>'
 
-    def generate_reports(self, keywords, before, after):
+    def generate_reports(self, keywordsfilename, before, after):
         reportbase = 'keywords_aftonbladet_idg_' + after.strftime('%Y-%m-%d') + '_' + before.strftime('%Y-%m-%d')
+
+        conf = open(keywordsfilename)
+        keywords = json.load(conf)
 
         try:
             shutil.rmtree(reportbase)
@@ -199,9 +207,9 @@ class Scraper(object):
             pass
 
         try:
-            shutil.rmtree(reportbase + '.zip')
-        except OSError:
-            pass
+            os.remove(reportbase + '.zip')
+        except OSError as e:
+            print(e)
 
         os.mkdir(reportbase)
 
@@ -250,10 +258,21 @@ class Scraper(object):
                 self._reportname + '.pdf']
             )
             subprocess.call(
+                ['cp',
+                keywordsfilename,
+                reportbase]
+            )
+            subprocess.call(
+                ['rm',
+                self._reportname + '.html',
+                ]
+            )
+            subprocess.call(
                 ['7z',
                 'a',
                 '-r',
                 '-mx=9',
+                '-v5m',
                 reportbase + '.zip',
                 reportbase]
             )
@@ -453,7 +472,7 @@ class Scraper(object):
         request_done = False
         while not request_done:
             try:
-                r = self._cached_sess.get(url)
+                r = self._cached_sess.get(url, proxies=self._proxies)
                 request_done = True
             except requests.exceptions.ConnectionError as e:
                 print(e)
@@ -507,7 +526,7 @@ class Scraper(object):
         request_done = False
         while not request_done:
             try:
-                r = self._cached_sess.get(url)
+                r = self._cached_sess.get(url, proxies=self._proxies)
                 request_done = True
             except requests.exceptions.ConnectionError as e:
                 print(e)

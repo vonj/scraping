@@ -5,7 +5,6 @@ import datetime
 import scraper
 import pytz
 import sys
-import json
 
 reload(sys)
 sys.setdefaultencoding('UTF-8')
@@ -24,10 +23,7 @@ if len(sys.argv) == 3:
 
 sc = scraper.Scraper(grace)
 
-with open(sys.argv[1]) as conf:
-    keywords = json.load(conf)
-
 before=datetime.datetime(2015, 1, 1, 0, 0, tzinfo=stockholm)
 after=datetime.datetime(2013, 1, 1, 0, 0, tzinfo=stockholm)
-report = sc.generate_reports(keywords, before=before, after=after)
+report = sc.generate_reports(sys.argv[1], before=before, after=after)
 
