@@ -209,7 +209,7 @@ class Scraper(object):
         try:
             os.remove(reportbase + '.zip')
         except OSError as e:
-            print(e)
+            pass
 
         os.mkdir(reportbase)
 
@@ -516,6 +516,7 @@ class Scraper(object):
                 'publication':    'aftonbladet.se',
                 'fulltext_plain': self._html2text.handle(fulltext),
             }
+        print('added ' + url)
 
     def _get_article_idg(self, url, publication, title, before, after, keyword):
         email = ''
