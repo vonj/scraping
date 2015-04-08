@@ -1,0 +1,5 @@
+#!/bin/bash
+
+export DYLD_LIBRARY_PATH=/Library/Python/2.7/site-packages/savReaderWriter/spssio/macos
+ipython ./main.py ${*}
+
